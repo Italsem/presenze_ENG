@@ -72,56 +72,73 @@ def _pdf_escape(txt: str):
 def export_month_pdf(filepath: str, employee_label: str, yyyy_mm: str, rows, stats, ferie_info):
     total, giorni, media, ferie_mese = stats
     ferie_annuali, ferie_anno, ferie_rimanenti = ferie_info
-    lines = [
-        "Report mensile presenze",
+
+    text_lines = [
         f"Dipendente: {employee_label}",
-        f"Mese: {yyyy_mm}",
-        "",
-        "Data       Tipo      Entrata  U.Pausa  Rientro  Uscita   Totale   Note",
+        f"Periodo: {yyyy_mm}",
+        f"Totale mese: {minutes_to_hhmm(total)} | Giorni lavorati: {giorni} | Media: {minutes_to_hhmm(media)}",
+        f"Ferie mese: {ferie_mese} | Ferie anno: {ferie_anno}/{ferie_annuali} | Residuo: {ferie_rimanenti}",
     ]
+
+    # PDF base con qualche dettaglio grafico (palette azzurra) e "logo" vettoriale.
+    content = [
+        "q 0.12 0.56 0.87 rg 0 790 595 52 re f Q",  # header azzurro
+        "q 0.06 0.38 0.69 rg 20 804 26 26 re f Q",   # blocco logo
+        "BT /F2 14 Tf 58 817 Td (ENG) Tj ET",        # testo logo
+        "BT /F2 18 Tf 98 818 Td (Presenze ENG - Report Mensile) Tj ET",
+        "BT /F1 11 Tf 40 772 Td (" + _pdf_escape(text_lines[0]) + ") Tj ET",
+        "BT /F1 11 Tf 40 756 Td (" + _pdf_escape(text_lines[1]) + ") Tj ET",
+        "q 0.85 0.92 0.98 rg 30 728 535 22 re f Q",
+        "BT /F2 10 Tf 36 734 Td (Data) Tj ET",
+        "BT /F2 10 Tf 104 734 Td (Tipo) Tj ET",
+        "BT /F2 10 Tf 166 734 Td (Entrata) Tj ET",
+        "BT /F2 10 Tf 226 734 Td (U. Pausa) Tj ET",
+        "BT /F2 10 Tf 296 734 Td (Rientro) Tj ET",
+        "BT /F2 10 Tf 360 734 Td (Uscita) Tj ET",
+        "BT /F2 10 Tf 422 734 Td (Totale) Tj ET",
+        "BT /F2 10 Tf 486 734 Td (Note) Tj ET",
+    ]
+
+    y = 716
     for _pid, d, tipo, e, up, rp, u, mins, note in rows:
-        lines.append(
-            f"{(d or ''):<10} {(tipo or ''):<9} {(e or ''):<7} {(up or ''):<8} {(rp or ''):<7} {(u or ''):<8} {minutes_to_hhmm(mins):<8} {(note or '')[:60]}"
-        )
-    lines.extend([
-        "",
-        f"Totale ore mese: {minutes_to_hhmm(total)}",
-        f"Giorni lavorati: {giorni}",
-        f"Media giornaliera: {minutes_to_hhmm(media)}",
-        f"Ferie mese: {ferie_mese}",
-        f"Ferie anno usate: {ferie_anno}/{ferie_annuali}",
-        f"Ferie rimanenti: {ferie_rimanenti}",
-    ])
-    y = 800
-    content = ["BT", "/F1 10 Tf"]
-    for line in lines:
-        content.append(f"1 0 0 1 40 {y} Tm ({_pdf_escape(line)}) Tj")
+        row_vals = [d or "", tipo or "", e or "", up or "", rp or "", u or "", minutes_to_hhmm(mins), (note or "")[:22]]
+        x_positions = [36, 104, 166, 226, 296, 360, 422, 486]
+        for x, val in zip(x_positions, row_vals):
+            content.append(f"BT /F1 9 Tf {x} {y} Td ({_pdf_escape(val)}) Tj ET")
         y -= 14
-        if y < 40:
+        if y < 120:
             break
-    content.append("ET")
+
+    content.extend([
+        f"BT /F2 11 Tf 40 88 Td ({_pdf_escape(text_lines[2])}) Tj ET",
+        f"BT /F1 11 Tf 40 70 Td ({_pdf_escape(text_lines[3])}) Tj ET",
+    ])
+
     stream = "\n".join(content).encode("latin-1", errors="replace")
     objects = [
         b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
         b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
-        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
-        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj\n",
-        f"5 0 obj << /Length {len(stream)} >> stream\n".encode("ascii") + stream + b"\nendstream endobj\n",
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >> endobj\n",
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+        b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj\n",
+        f"6 0 obj << /Length {len(stream)} >> stream\n".encode("ascii") + stream + b"\nendstream endobj\n",
     ]
+
     pdf = bytearray(b"%PDF-1.4\n")
     offsets = [0]
     for obj in objects:
         offsets.append(len(pdf))
         pdf.extend(obj)
+
     xref_pos = len(pdf)
     pdf.extend(f"xref\n0 {len(offsets)}\n".encode("ascii"))
     pdf.extend(b"0000000000 65535 f \n")
     for off in offsets[1:]:
         pdf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
-    pdf.extend(
-        f"trailer << /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
-    )
+    pdf.extend(f"trailer << /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii"))
+
     Path(filepath).write_bytes(pdf)
+
 # ------------------ DB ------------------
 def db_connect():
     return sqlite3.connect(DB_NAME)
@@ -210,6 +227,18 @@ def db_add_presence(dip_id, data_str, tipo, entrata, uscita_pausa, rientro, usci
     """, (dip_id, data_str, tipo, entrata, uscita_pausa, rientro, uscita, minuti, note))
     con.commit()
     con.close()
+
+
+def db_update_presence(presence_id, dip_id, data_str, tipo, entrata, uscita_pausa, rientro, uscita, minuti, note):
+    con = db_connect()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE presenze
+        SET data=?, tipo=?, entrata=?, uscita_pausa=?, rientro=?, uscita=?, minuti_lavorati=?, note=?
+        WHERE id=? AND dipendente_id=?
+    """, (data_str, tipo, entrata, uscita_pausa, rientro, uscita, minuti, note, presence_id, dip_id))
+    con.commit()
+    con.close()
 def db_list_presences(dip_id, yyyy_mm):
     start, end = month_bounds(yyyy_mm)
     con = db_connect()
@@ -282,6 +311,7 @@ class App(tk.Tk):
         self.emp_reverse = {}
         self.emp_ferie_annuali = {}
         self.emp_id_selected = None
+        self.presence_id_selected = None
         self._build_ui()
         self.refresh_employees()
     def _assets_path(self, filename):
@@ -419,6 +449,7 @@ class App(tk.Tk):
             return
         db_add_employee(nome, cognome, ferie_annuali)
         self.emp_id_selected = None
+        self.presence_id_selected = None
         self.refresh_employees()
         messagebox.showinfo("OK", "Dipendente aggiunto.")
     def update_employee(self):
@@ -444,6 +475,7 @@ class App(tk.Tk):
             return
         db_delete_employee(self.emp_id_selected)
         self.emp_id_selected = None
+        self.presence_id_selected = None
         self.ent_nome.delete(0, tk.END)
         self.ent_cognome.delete(0, tk.END)
         self.ent_ferie_annuali.delete(0, tk.END)
@@ -487,6 +519,8 @@ class App(tk.Tk):
         self.ent_month.insert(0, datetime.now().strftime("%Y-%m"))
         ttk.Button(top, text="Carica mese", command=self.load_month).grid(row=0, column=4, padx=10, pady=6)
         ttk.Button(top, text="Esporta PDF", command=self.export_month_pdf_ui).grid(row=0, column=5, padx=10, pady=6)
+        self.lbl_media_top = ttk.Label(top, text="Media mese: 0:00", font=("Segoe UI", 10, "bold"))
+        self.lbl_media_top.grid(row=0, column=6, padx=10, pady=6, sticky="w")
         frm_ins = ttk.Labelframe(self.tab_pres, text="Inserisci presenza", style="Card.TLabelframe")
         frm_ins.pack(fill="x", padx=8, pady=8)
         ttk.Label(frm_ins, text="Data (YYYY-MM-DD)").grid(row=0, column=0, padx=6, pady=4, sticky="w")
@@ -514,7 +548,11 @@ class App(tk.Tk):
         self.ent_out.grid(row=1, column=5, padx=6, pady=6)
         self.ent_note.grid(row=1, column=6, padx=6, pady=6)
         self.ent_date.insert(0, datetime.now().strftime("%Y-%m-%d"))
-        ttk.Button(frm_ins, text="Salva presenza", command=self.add_presence).grid(row=1, column=7, padx=10, pady=6)
+        ttk.Button(frm_ins, text="Salva presenza", command=self.add_presence).grid(row=1, column=7, padx=6, pady=6)
+        ttk.Button(frm_ins, text="Aggiorna selezionata", command=self.update_selected_presence).grid(row=1, column=8, padx=6, pady=6)
+        ttk.Button(frm_ins, text="Nuovo inserimento", command=self.clear_presence_form).grid(row=1, column=9, padx=6, pady=6)
+        self.lbl_edit_mode = ttk.Label(frm_ins, text="Modalità: Nuovo inserimento", font=("Segoe UI", 9, "bold"))
+        self.lbl_edit_mode.grid(row=2, column=0, columnspan=5, padx=6, pady=(2, 6), sticky="w")
         frm_tbl = ttk.Labelframe(self.tab_pres, text="Presenze del mese", style="Card.TLabelframe")
         frm_tbl.pack(fill="both", expand=True, padx=8, pady=8)
         cols = ("data", "tipo", "entrata", "uscita_pausa", "rientro", "uscita", "totale", "note")
@@ -524,6 +562,7 @@ class App(tk.Tk):
             self.tree.heading(c, text=c)
             self.tree.column(c, width=widths.get(c, 100), anchor="w")
         self.tree.pack(fill="both", expand=True, padx=6, pady=6)
+        self.tree.bind("<<TreeviewSelect>>", self.on_presence_select)
         frm_stats = ttk.Labelframe(self.tab_pres, text="Statistiche mese", style="Card.TLabelframe")
         frm_stats.pack(fill="x", padx=8, pady=8)
         self.lbl_tot = ttk.Label(frm_stats, text="Totale: 0:00", font=("Segoe UI", 11, "bold"))
@@ -570,12 +609,60 @@ class App(tk.Tk):
         filepath = os.path.join(os.path.dirname(__file__), out_name)
         export_month_pdf(filepath, employee_label, yyyy_mm, rows, stats, (ferie_annuali, ferie_anno, ferie_rimanenti))
         messagebox.showinfo("PDF creato", f"Report esportato in:\n{filepath}")
+    def clear_presence_form(self):
+        self.presence_id_selected = None
+        self.lbl_edit_mode.config(text="Modalità: Nuovo inserimento")
+        self.ent_date.delete(0, tk.END)
+        self.ent_date.insert(0, datetime.now().strftime("%Y-%m-%d"))
+        self.cmb_tipo.set("Lavoro")
+        self.on_tipo_change()
+        for field in [self.ent_in, self.ent_up, self.ent_rp, self.ent_out, self.ent_note]:
+            field.configure(state="normal")
+            field.delete(0, tk.END)
+        self.on_tipo_change()
+
+    def on_presence_select(self, _evt=None):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        item_id = sel[0]
+        try:
+            self.presence_id_selected = int(item_id)
+        except ValueError:
+            self.presence_id_selected = None
+            return
+
+        vals = self.tree.item(item_id, "values")
+        if not vals:
+            return
+
+        d, tipo, e, up, rp, u, _tot, note = vals
+        self.ent_date.delete(0, tk.END)
+        self.ent_date.insert(0, d)
+        self.cmb_tipo.set(tipo)
+        self.on_tipo_change()
+
+        for field, value in [(self.ent_in, e), (self.ent_up, up), (self.ent_rp, rp), (self.ent_out, u), (self.ent_note, note)]:
+            field.configure(state="normal")
+            field.delete(0, tk.END)
+            if value:
+                field.insert(0, value)
+
+        self.on_tipo_change()
+        self.lbl_edit_mode.config(text=f"Modalità: Modifica riga ID {self.presence_id_selected}")
+
+    def update_selected_presence(self):
+        if not self.presence_id_selected:
+            messagebox.showwarning("Errore", "Seleziona una riga nella tabella presenze da modificare.")
+            return
+        self.add_presence(update_mode=True)
+
     def selected_employee_id(self):
         label = self.cmb_emp.get().strip()
         if not label or label not in self.emp_map:
             return None
         return self.emp_map[label]
-    def add_presence(self):
+    def add_presence(self, update_mode=False):
         dip_id = self.selected_employee_id()
         if dip_id is None:
             messagebox.showwarning("Errore", "Seleziona un dipendente.")
@@ -601,9 +688,15 @@ class App(tk.Tk):
         else:
             entrata = uscita_pausa = rientro = uscita = ""
             minuti = 0
-        db_add_presence(dip_id, data_str, tipo, entrata, uscita_pausa, rientro, uscita, minuti, note)
+        if update_mode:
+            db_update_presence(self.presence_id_selected, dip_id, data_str, tipo, entrata, uscita_pausa, rientro, uscita, minuti, note)
+            msg = "Presenza aggiornata"
+        else:
+            db_add_presence(dip_id, data_str, tipo, entrata, uscita_pausa, rientro, uscita, minuti, note)
+            msg = "Presenza salvata"
         self.load_month()
-        messagebox.showinfo("OK", f"Presenza salvata. Totale: {minutes_to_hhmm(minuti)}")
+        self.clear_presence_form()
+        messagebox.showinfo("OK", f"{msg}. Totale: {minutes_to_hhmm(minuti)}")
     def load_month(self):
         dip_id = self.selected_employee_id()
         if dip_id is None:
@@ -618,7 +711,7 @@ class App(tk.Tk):
             self.tree.delete(row)
         rows = db_list_presences(dip_id, yyyy_mm)
         for _pid, d, tipo, e, up, rp, u, mins, note in rows:
-            self.tree.insert("", tk.END, values=(d, tipo, e, up, rp, u, minutes_to_hhmm(mins), note or ""))
+            self.tree.insert("", tk.END, iid=str(_pid), values=(d, tipo, e, up, rp, u, minutes_to_hhmm(mins), note or ""))
         tot, giorni, media, ferie_mese = db_month_stats(dip_id, yyyy_mm)
         year = int(yyyy_mm.split("-")[0])
         ferie_anno = db_year_ferie(dip_id, year)
@@ -627,6 +720,7 @@ class App(tk.Tk):
         self.lbl_tot.config(text=f"Totale: {minutes_to_hhmm(tot)}")
         self.lbl_giorni.config(text=f"Giorni lavorati: {giorni}")
         self.lbl_media.config(text=f"Media: {minutes_to_hhmm(media)}")
+        self.lbl_media_top.config(text=f"Media mese: {minutes_to_hhmm(media)}")
         self.lbl_ferie_mese.config(text=f"Ferie mese: {ferie_mese}")
         self.lbl_ferie_anno.config(text=f"Ferie anno: {ferie_anno}/{ferie_annuali} (restanti: {ferie_rimanenti})")
         self.refresh_employee_holiday_counter(dip_id)

@@ -42,6 +42,18 @@ class PresenzeTests(unittest.TestCase):
         self.assertEqual(ferie, 1)
         self.assertEqual(app.db_year_ferie(emp_id, 2026), 1)
 
+    def test_update_presence_row(self):
+        app.db_add_employee("Mario", "Rossi", 20)
+        emp_id = app.db_list_employees()[0][0]
+        app.db_add_presence(emp_id, "2026-01-02", "Lavoro", "08:00", "", "", "12:00", 240, "")
+        presence_id = app.db_list_presences(emp_id, "2026-01")[0][0]
+
+        app.db_update_presence(presence_id, emp_id, "2026-01-02", "Lavoro", "08:00", "12:00", "13:00", "17:00", 480, "aggiornata")
+        row = app.db_list_presences(emp_id, "2026-01")[0]
+
+        self.assertEqual(row[7], 480)
+        self.assertEqual(row[8], "aggiornata")
+
     def test_migration_old_presenze_schema(self):
         import sqlite3
         con = sqlite3.connect(app.DB_NAME)
