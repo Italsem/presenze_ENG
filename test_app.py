@@ -42,6 +42,22 @@ class PresenzeTests(unittest.TestCase):
         self.assertEqual(ferie, 1)
         self.assertEqual(app.db_year_ferie(emp_id, 2026), 1)
 
+    def test_migration_old_presenze_schema(self):
+        import sqlite3
+        con = sqlite3.connect(app.DB_NAME)
+        cur = con.cursor()
+        cur.execute("DROP TABLE IF EXISTS presenze")
+        cur.execute("CREATE TABLE presenze(id INTEGER PRIMARY KEY AUTOINCREMENT, dipendente_id INTEGER NOT NULL, data TEXT NOT NULL)")
+        con.commit()
+        con.close()
+
+        app.db_init()
+        app.db_add_employee("Luigi", "Bianchi", 10)
+        emp_id = app.db_list_employees()[0][0]
+        app.db_add_presence(emp_id, "2026-02-01", "Lavoro", "08:00", "", "", "12:00", 240, "")
+        rows = app.db_list_presences(emp_id, "2026-02")
+        self.assertEqual(len(rows), 1)
+
     def test_export_pdf(self):
         out = os.path.join(self.tmp.name, "report.pdf")
         rows = [(1, "2026-01-02", "Lavoro", "08:00", "12:00", "13:00", "17:00", 480, "ok")]

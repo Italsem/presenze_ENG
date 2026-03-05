@@ -155,6 +155,22 @@ def db_init():
             FOREIGN KEY(dipendente_id) REFERENCES dipendenti(id)
         )
     """)
+    cur.execute("PRAGMA table_info(presenze)")
+    presenze_cols = [r[1] for r in cur.fetchall()]
+    if "tipo" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN tipo TEXT NOT NULL DEFAULT 'Lavoro'")
+    if "entrata" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN entrata TEXT")
+    if "uscita_pausa" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN uscita_pausa TEXT")
+    if "rientro" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN rientro TEXT")
+    if "uscita" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN uscita TEXT")
+    if "minuti_lavorati" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN minuti_lavorati INTEGER NOT NULL DEFAULT 0")
+    if "note" not in presenze_cols:
+        cur.execute("ALTER TABLE presenze ADD COLUMN note TEXT")
     con.commit()
     con.close()
 # ---- Dipendenti ----
