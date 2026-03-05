@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database locale
+presenze.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Virtual env
+.venv/
+venv/
